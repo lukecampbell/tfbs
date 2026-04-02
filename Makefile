@@ -1,4 +1,4 @@
-.PHONY: docker-local docker-scan clean
+.PHONY: docker-local docker-scan clean bundle
 
 IMAGE_NAME := tfbs
 
@@ -14,3 +14,7 @@ docker-local:
 
 docker-scan: docker-local reports
 	docker run -it -v $${HOME}/.cache/trivy-docker:/cache -v $${PWD}/reports:/reports -v /var/run/docker.sock:/var/run/docker.sock --rm aquasec/trivy --cache-dir /cache image --format json --output=reports/trivy-$$(date +%Y%m%d%H%M%S).json $(IMAGE_NAME):latest
+
+bundle:
+	$(MAKE) -C ../tfbs-ui bundle
+	rsync -av --delete ../tfbs-ui/dist/ static/
