@@ -29,3 +29,7 @@ Cargo.lock
 
 # Built Visual Studio Code Extensions
 *.vsix
+certs/
+static/
+tasks/
+tfbs.db
