@@ -1,12 +1,16 @@
-![Pipeline Status](http://git.axiom/axiom/tfbs/badges/main/pipeline.svg)
-![Cargo Audit](http://git.axiom/axiom/tfbs/-/jobs/artifacts/main/raw/cargo-audit.svg?job=badger-cargo-audit)
-![Trivy](http://git.axiom/axiom/tfbs/-/jobs/artifacts/main/raw/trivy-audit.svg?job=badger-trivy)
-
+![CI](https://github.com/lukecampbell/tfbs/actions/workflows/ci.yml/badge.svg)
+![Cargo Audit](https://github.com/lukecampbell/tfbs/actions/workflows/audit.yml/badge.svg)
+![Gitleaks](https://github.com/lukecampbell/tfbs/actions/workflows/gitleaks.yml/badge.svg)
 
 tfbs
-===============
+====
 
-I don't really know just yet
+A web application with a Rust (actix-web) backend serving REST APIs and a Vite PWA frontend.
+
+- REST API with OpenAPI/Swagger documentation
+- User management with argon2 password hashing
+- SQLite for development, Postgres for production (via sqlx)
+- Optional TLS with automatic self-signed certificate generation
 
 Copyright 2026 Luke Campbell
 
@@ -15,19 +19,40 @@ See LICENSE for details.
 Building
 --------
 
-In order to build the project, contributors need rust, see
-[Install Rust](https://www.rust-lang.org/tools/install) for details about
-installing the rust development environment on your system.
+Prerequisites: [Rust](https://www.rust-lang.org/tools/install) and [Node.js](https://nodejs.org/) (for the frontend).
 
-To build the project:
+Build the backend:
 
     cargo build
 
-To run the binary without building a release version or installing to a locally available path:
+Build and bundle the frontend:
+
+    make bundle
+
+Run the server:
 
     cargo run
 
-For details about `cargo` and using `cargo`, please see [The Cargo Book](https://doc.rust-lang.org/cargo/commands/index.html)
+Run with TLS:
+
+    cargo run -- --tls
+
+API documentation is available at `/swagger-ui/` when the server is running.
+
+For details about `cargo`, see [The Cargo Book](https://doc.rust-lang.org/cargo/commands/index.html).
+
+Database
+--------
+
+By default, tfbs uses a local SQLite database. To use Postgres, set the `DATABASE_URL` environment variable:
+
+    export DATABASE_URL=postgres://user:pass@localhost:5432/tfbs
+
+A `docker-compose.yml` is provided to run Postgres locally:
+
+    docker compose up -d
+
+Migrations run automatically on startup.
 
 Docker
 ------
@@ -36,6 +61,6 @@ To build the docker image:
 
     docker build -t tfbs .
 
-To run the image as a docker container
+To run the image as a docker container:
 
     docker run -it --rm tfbs
