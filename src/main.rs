@@ -1,19 +1,19 @@
 use std::net::ToSocketAddrs;
 
 use actix_files::{Files, NamedFile};
-use actix_web::{App, HttpServer, web};
+use actix_web::{web, App, HttpServer};
 use anyhow::Context;
 use clap::Parser;
+use sqlx::any::AnyPoolOptions;
 use tracing_actix_web::TracingLogger;
 use tracing_subscriber::EnvFilter;
-use sqlx::any::AnyPoolOptions;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-mod tls;
-mod data;
 mod api;
+mod data;
 mod error;
+mod tls;
 
 #[derive(OpenApi)]
 #[openapi(
@@ -42,8 +42,9 @@ impl Args {
 }
 
 async fn download_cert() -> actix_web::Result<NamedFile> {
-    Ok(NamedFile::open(tls::CERT_PATH)?
-        .set_content_disposition(actix_web::http::header::ContentDisposition::attachment("server.pem")))
+    Ok(NamedFile::open(tls::CERT_PATH)?.set_content_disposition(
+        actix_web::http::header::ContentDisposition::attachment("server.pem"),
+    ))
 }
 
 fn sanitize_database_url(database_url: &str) -> String {
@@ -71,30 +72,35 @@ async fn main() -> anyhow::Result<()> {
 
     let use_tls = args.tls;
     sqlx::any::install_default_drivers();
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "sqlite://tfbs.db?mode=rwc".to_string());
+    let database_url =
+        std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://tfbs.db?mode=rwc".to_string());
 
-    tracing::info!("Creating database pool for {}", sanitize_database_url(&database_url));
+    tracing::info!(
+        "Creating database pool for {}",
+        sanitize_database_url(&database_url)
+    );
     let pool = AnyPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
         .await
         .context("Failed to connect to database")?;
     tracing::info!("Migrating database");
-    sqlx::migrate!().run(&pool).await.context("Failed to run migrations")?;
+    sqlx::migrate!()
+        .run(&pool)
+        .await
+        .context("Failed to run migrations")?;
     tracing::info!("Migration complete");
 
     let server = HttpServer::new(move || {
-        let mut app = App::new()
-            .wrap(TracingLogger::default());
+        let mut app = App::new().wrap(TracingLogger::default());
         if use_tls {
             app = app.route("/cert", web::get().to(download_cert));
         }
-        app.service(
-            web::scope("/api")
-                .route("/users", web::post().to(api::create_user))
-        )
-            .service(SwaggerUi::new("/swagger-ui/{_:.*}").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        app.service(web::scope("/api").route("/users", web::post().to(api::create_user)))
+            .service(
+                SwaggerUi::new("/swagger-ui/{_:.*}")
+                    .url("/api-docs/openapi.json", ApiDoc::openapi()),
+            )
             .service(Files::new("/", "./static").index_file("index.html"))
             .app_data(web::Data::new(pool.clone()))
     });

@@ -23,9 +23,8 @@ pub fn load_or_generate_config(host: &str) -> anyhow::Result<ServerConfig> {
     };
 
     let key = {
-        let mut reader = std::io::BufReader::new(
-            fs::File::open(KEY_PATH).context("Failed to open key file")?,
-        );
+        let mut reader =
+            std::io::BufReader::new(fs::File::open(KEY_PATH).context("Failed to open key file")?);
         let key = pkcs8_private_keys(&mut reader)
             .next()
             .ok_or_else(|| anyhow::anyhow!("No private key found in {KEY_PATH}"))?
@@ -65,6 +64,10 @@ fn generate_self_signed(host: &str) -> anyhow::Result<()> {
     fs::create_dir_all("certs").context("Failed to create certs directory")?;
     fs::write(CERT_PATH, cert.pem()).context("Failed to write certificate")?;
     fs::write(KEY_PATH, key_pair.serialize_pem()).context("Failed to write key")?;
-    tracing::info!(cert_path = CERT_PATH, key_path = KEY_PATH, "Certificate written");
+    tracing::info!(
+        cert_path = CERT_PATH,
+        key_path = KEY_PATH,
+        "Certificate written"
+    );
     Ok(())
 }

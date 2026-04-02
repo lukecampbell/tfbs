@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, web};
+use actix_web::{web, HttpResponse};
 use argon2::password_hash;
 use serde::Deserialize;
 use sqlx::AnyPool;
@@ -32,11 +32,9 @@ impl TryFrom<&CreateUser> for User {
 )]
 pub async fn create_user(
     pool: web::Data<AnyPool>,
-    body: web::Json<CreateUser>
+    body: web::Json<CreateUser>,
 ) -> actix_web::Result<HttpResponse> {
-    let user = User::try_from(&*body).map_err(|e| {
-        AppError::PasswordHash(e.to_string())
-    })?;
+    let user = User::try_from(&*body).map_err(|e| AppError::PasswordHash(e.to_string()))?;
     sqlx::query("INSERT INTO users(id, login, password_hash, reset_email) VALUES ($1, $2, $3, $4)")
         .bind(user.id.to_string())
         .bind(&user.login)

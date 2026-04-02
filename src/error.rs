@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, ResponseError, http::StatusCode};
+use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
@@ -6,7 +6,7 @@ pub enum AppError {
     PasswordHash(String),
 
     #[error("Database")]
-    DatabaseError(#[from] sqlx::Error)
+    DatabaseError(#[from] sqlx::Error),
 }
 
 impl AppError {
