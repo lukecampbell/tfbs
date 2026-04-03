@@ -1,7 +1,8 @@
+use actix_session::Session;
 use actix_web::{web, HttpResponse};
 use argon2::password_hash;
 use serde::Deserialize;
-use sqlx::AnyPool;
+use sqlx::PgPool;
 
 use crate::{data::User, error::AppError};
 
@@ -10,13 +11,25 @@ pub struct CreateUser {
     pub login: String,
     pub password: String,
     pub reset_email: Option<String>,
+    pub roles: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, utoipa::ToSchema)]
+pub struct LoginRequest {
+    pub login: String,
+    pub password: String,
 }
 
 impl TryFrom<&CreateUser> for User {
     type Error = password_hash::Error;
 
     fn try_from(value: &CreateUser) -> Result<Self, password_hash::Error> {
-        Self::new(&value.login, &value.password, value.reset_email.as_deref())
+        Self::new(
+            &value.login,
+            &value.password,
+            value.reset_email.as_deref(),
+            value.roles.clone(),
+        )
     }
 }
 
@@ -31,12 +44,12 @@ impl TryFrom<&CreateUser> for User {
     )
 )]
 pub async fn create_user(
-    pool: web::Data<AnyPool>,
+    pool: web::Data<PgPool>,
     body: web::Json<CreateUser>,
 ) -> actix_web::Result<HttpResponse> {
     let user = User::try_from(&*body).map_err(|e| AppError::PasswordHash(e.to_string()))?;
     sqlx::query("INSERT INTO users(id, login, password_hash, reset_email) VALUES ($1, $2, $3, $4)")
-        .bind(user.id.to_string())
+        .bind(user.id)
         .bind(&user.login)
         .bind(&user.password_hash)
         .bind(&user.reset_email)
@@ -45,4 +58,52 @@ pub async fn create_user(
         .map_err(AppError::DatabaseError)?;
 
     Ok(HttpResponse::Created().json(&user))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/login",
+    request_body = LoginRequest,
+    responses(
+        (status = 204, description = "Authenticated Successfully"),
+        (status = 401, description = "Invalid credentials"),
+    )
+)]
+pub async fn login(
+    session: Session,
+    pool: web::Data<PgPool>,
+    req: web::Json<LoginRequest>,
+) -> actix_web::Result<HttpResponse> {
+    let user = sqlx::query_as::<_, User>(
+        "SELECT id, login, password_hash, reset_email, roles FROM users WHERE login=$1",
+    )
+    .bind(&req.login)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(AppError::DatabaseError)?;
+    match user {
+        Some(user) if user.verify_password(&req.password) => {
+            session.insert("user", &user).unwrap();
+            Ok(HttpResponse::Ok().json(serde_json::json!({"login": user.login})))
+        }
+        _ => {
+            Ok(HttpResponse::Unauthorized()
+                .json(serde_json::json!({"error": "Invalid credentials"})))
+        }
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/verify",
+    responses(
+        (status = 200, description = "User is logged in"),
+        (status = 401, description = "User is not logged in"),
+    )
+)]
+pub async fn verify(session: Session) -> actix_web::Result<HttpResponse> {
+    let Ok(Some(user)) = session.get::<User>("user") else {
+        return Ok(HttpResponse::Unauthorized().finish());
+    };
+    Ok(HttpResponse::Ok().json(serde_json::json!({"user": &user.login})))
 }

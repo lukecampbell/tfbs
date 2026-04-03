@@ -8,7 +8,6 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow, utoipa::ToSchema)]
 pub struct User {
-    #[sqlx(try_from = "String")]
     pub id: Uuid,
     /// Login
     pub login: String,
@@ -16,6 +15,8 @@ pub struct User {
     pub password_hash: String,
     /// Email to use for resetting and tokens
     pub reset_email: Option<String>,
+    /// Roles available to this account
+    pub roles: Vec<String>,
 }
 
 impl User {
@@ -23,12 +24,14 @@ impl User {
         login: &str,
         password: &str,
         reset_email: Option<&str>,
+        roles: Vec<String>,
     ) -> Result<Self, password_hash::Error> {
         Ok(Self {
             id: Uuid::new_v4(),
             login: login.to_string(),
             password_hash: Self::hash_password(password)?,
             reset_email: reset_email.map(|v| v.to_string()),
+            roles,
         })
     }
 
@@ -60,7 +63,8 @@ mod tests {
 
     #[test]
     fn test_password_hashing() -> anyhow::Result<()> {
-        let user = User::new("bob", "bad-password", None).map_err(|e| anyhow::anyhow!("{e}"))?;
+        let user = User::new("bob", "bad-password", None, Default::default())
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
         assert!(user.verify_password("bad-password"));
         assert!(!user.verify_password("good-password"));
         Ok(())

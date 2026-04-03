@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 actix-files = "0.6.10"
-actix-session = { version = "0.11.0", features = ["cookie-session"] }
+actix-session = { version = "0.11.0", features = ["redis-session"] }
 actix-web = { version = "4.13.0", features = ["rustls-0_23"] }
 anyhow = "1.0.102"
 argon2 = "0.5.3"
@@ -22,9 +22,10 @@ tokio = { version = "1.50.0", features = ["full"] }
 tracing = { version = "0.1.44", features = ["log"] }
 tracing-actix-web = "0.7.21"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
-sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "postgres"] }
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "postgres", "uuid"] }
 url = "2"
 utoipa = { version = "5", features = ["actix_extras", "uuid"] }
 utoipa-swagger-ui = { version = "9", features = ["actix-web"] }
 uuid = { version = "1.23.0", features = ["serde"] }
 thiserror = "2.0.18"
+rand = "0.10.0"
