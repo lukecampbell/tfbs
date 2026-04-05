@@ -1,7 +1,7 @@
 use actix_session::Session;
 use actix_web::{web, HttpResponse};
 use argon2::password_hash;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 use crate::{data::User, error::AppError};
@@ -94,6 +94,22 @@ pub async fn login(
 }
 
 #[utoipa::path(
+    get,
+    path = "/api/logout",
+    responses(
+        (status = 204, description = "User successfully logged out"),
+        (status = 401, description = "User is not logged in")
+    )
+)]
+pub async fn logout(session: Session) -> actix_web::Result<HttpResponse> {
+    let Ok(Some(_user)) = session.get::<User>("user") else {
+        return Ok(HttpResponse::Unauthorized().finish());
+    };
+    session.remove("user");
+    Ok(HttpResponse::NoContent().finish())
+}
+
+#[utoipa::path(
     post,
     path = "/api/verify",
     responses(
@@ -106,4 +122,34 @@ pub async fn verify(session: Session) -> actix_web::Result<HttpResponse> {
         return Ok(HttpResponse::Unauthorized().finish());
     };
     Ok(HttpResponse::Ok().json(serde_json::json!({"user": &user.login})))
+}
+
+#[derive(Clone, Serialize, Debug, utoipa::ToSchema)]
+pub struct SessionUser {
+    pub login: String,
+    pub roles: Vec<String>,
+}
+
+impl From<&User> for SessionUser {
+    fn from(user: &User) -> Self {
+        SessionUser {
+            login: user.login.clone(),
+            roles: user.roles.clone(),
+        }
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/user",
+    responses(
+        (status = 200, description = "User is logged in", body = SessionUser),
+        (status = 401, description = "User is not logged in"),
+    )
+)]
+pub async fn get_user(session: Session) -> actix_web::Result<HttpResponse> {
+    let Ok(Some(user)) = session.get::<User>("user") else {
+        return Ok(HttpResponse::Unauthorized().finish());
+    };
+    Ok(HttpResponse::Ok().json(SessionUser::from(&user)))
 }

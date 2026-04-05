@@ -24,8 +24,8 @@ mod tls;
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(api::create_user, api::login, api::verify,),
-    components(schemas(data::User, api::CreateUser, api::LoginRequest))
+    paths(api::create_user, api::login, api::logout, api::verify, api::get_user),
+    components(schemas(data::User, api::CreateUser, api::LoginRequest, api::SessionUser))
 )]
 struct ApiDoc;
 
@@ -75,9 +75,13 @@ fn sanitize_database_url(database_url: &str) -> String {
 
 async fn initialize_admin(args: &Args, pool: &PgPool) -> anyhow::Result<()> {
     let mut rng = rand::rng();
-    let password: String = (1..16)
-        .map(|_| rng.sample(rand::distr::Alphanumeric) as char)
-        .collect();
+    let password: String = if let Ok(pass) = std::env::var("ADMIN_PASSWORD") {
+        pass
+    } else {
+        (1..16)
+            .map(|_| rng.sample(rand::distr::Alphanumeric) as char)
+            .collect()
+    };
     tracing::info!("New session password is {}", password);
     let user = User::new(&args.admin_name, &password, None, vec!["admin".to_string()])
         .map_err(|e| anyhow::anyhow!("{e}"))
@@ -139,8 +143,10 @@ async fn main() -> anyhow::Result<()> {
         app.wrap(SessionMiddleware::builder(redis_store.clone(), secret_key.clone()).build())
             .service(
                 web::scope("/api")
+                    .route("/user", web::get().to(api::get_user))
                     .route("/users", web::post().to(api::create_user))
                     .route("/login", web::post().to(api::login))
+                    .route("/logout", web::get().to(api::logout))
                     .route("/verify", web::post().to(api::verify)),
             )
             .service(
