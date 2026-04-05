@@ -4,7 +4,7 @@ use std::path::Path;
 use anyhow::Context;
 use rcgen::{CertificateParams, DnType, KeyPair, SanType};
 use rustls::ServerConfig;
-use rustls_pemfile::{certs, pkcs8_private_keys};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
 use time::{Duration, OffsetDateTime};
 
 pub const CERT_PATH: &str = "certs/server.pem";
@@ -15,26 +15,16 @@ pub fn load_or_generate_config(host: &str) -> anyhow::Result<ServerConfig> {
         generate_self_signed(host)?;
     }
 
-    let cert_chain: Vec<_> = {
-        let mut reader = std::io::BufReader::new(
-            fs::File::open(CERT_PATH).context("Failed to open certificate file")?,
-        );
-        certs(&mut reader).collect::<Result<_, _>>()?
-    };
+    let cert_chain: Vec<CertificateDer<'static>> = CertificateDer::pem_file_iter(CERT_PATH)
+        .context("Failed to open certificate file")?
+        .collect::<Result<_, _>>()?;
 
-    let key = {
-        let mut reader =
-            std::io::BufReader::new(fs::File::open(KEY_PATH).context("Failed to open key file")?);
-        let key = pkcs8_private_keys(&mut reader)
-            .next()
-            .ok_or_else(|| anyhow::anyhow!("No private key found in {KEY_PATH}"))?
-            .context("Failed to parse private key")?;
-        key
-    };
+    let key = PrivateKeyDer::from_pem_file(KEY_PATH)
+        .context("Failed to read private key")?;
 
     ServerConfig::builder()
         .with_no_client_auth()
-        .with_single_cert(cert_chain, rustls::pki_types::PrivateKeyDer::Pkcs8(key))
+        .with_single_cert(cert_chain, key)
         .context("Failed to build TLS config")
 }
 

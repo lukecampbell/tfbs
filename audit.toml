@@ -1,0 +1,3 @@
+[advisories]
+# rsa via sqlx-mysql: not exploitable since we only use Postgres
+ignore = ["RUSTSEC-2023-0071"]
