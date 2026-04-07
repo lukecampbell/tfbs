@@ -38,8 +38,13 @@ struct Args {
     #[arg(short, long, default_value_t = 8080u16)]
     port: u16,
 
+    /// Launch with certificates in certs directory and serve over HTTPS/TLS
     #[arg(long, default_value_t = false)]
     tls: bool,
+
+    /// Don't include Secure flag in Cookies (enables Cookie sessions while over plain HTTP)
+    #[arg(long, default_value_t = false)]
+    insecure_cookies: bool,
 
     /// Admin account login. Try to avoid "admin" or "super" they're fairly predictable.
     #[arg(long, default_value = "elliot")]
@@ -137,10 +142,14 @@ async fn main() -> anyhow::Result<()> {
 
     let server = HttpServer::new(move || {
         let mut app = App::new().wrap(TracingLogger::default());
+        let mut session_mgr = SessionMiddleware::builder(redis_store.clone(), secret_key.clone());
+        if args.insecure_cookies {
+            session_mgr = session_mgr.cookie_secure(false);
+        }
         if use_tls {
             app = app.route("/cert", web::get().to(download_cert));
         }
-        app.wrap(SessionMiddleware::builder(redis_store.clone(), secret_key.clone()).build())
+        app.wrap(session_mgr.build())
             .service(
                 web::scope("/api")
                     .route("/user", web::get().to(api::get_user))

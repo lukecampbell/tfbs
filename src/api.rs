@@ -97,15 +97,11 @@ pub async fn login(
     get,
     path = "/api/logout",
     responses(
-        (status = 204, description = "User successfully logged out"),
-        (status = 401, description = "User is not logged in")
+        (status = 204, description = "User session is cleared")
     )
 )]
 pub async fn logout(session: Session) -> actix_web::Result<HttpResponse> {
-    let Ok(Some(_user)) = session.get::<User>("user") else {
-        return Ok(HttpResponse::Unauthorized().finish());
-    };
-    session.remove("user");
+    session.purge();
     Ok(HttpResponse::NoContent().finish())
 }
 

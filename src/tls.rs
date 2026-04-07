@@ -3,8 +3,8 @@ use std::path::Path;
 
 use anyhow::Context;
 use rcgen::{CertificateParams, DnType, KeyPair, SanType};
+use rustls::pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
 use rustls::ServerConfig;
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
 use time::{Duration, OffsetDateTime};
 
 pub const CERT_PATH: &str = "certs/server.pem";
@@ -19,8 +19,7 @@ pub fn load_or_generate_config(host: &str) -> anyhow::Result<ServerConfig> {
         .context("Failed to open certificate file")?
         .collect::<Result<_, _>>()?;
 
-    let key = PrivateKeyDer::from_pem_file(KEY_PATH)
-        .context("Failed to read private key")?;
+    let key = PrivateKeyDer::from_pem_file(KEY_PATH).context("Failed to read private key")?;
 
     ServerConfig::builder()
         .with_no_client_auth()
