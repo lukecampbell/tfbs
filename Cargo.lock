@@ -2662,6 +2662,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "argon2",
+ "base64 0.22.1",
  "clap",
  "rand 0.10.0",
  "rcgen",

@@ -1,15 +1,18 @@
 use std::net::ToSocketAddrs;
 
-use actix_files::{Files, NamedFile};
+use actix_files::NamedFile;
 use actix_session::storage::RedisSessionStore;
 use actix_session::SessionMiddleware;
 use actix_web::cookie::Key;
 use actix_web::{web, App, HttpServer};
 use anyhow::Context;
+use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use clap::Parser;
 use rand::RngExt;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use tracing::warn;
 use tracing_actix_web::TracingLogger;
 use tracing_subscriber::EnvFilter;
 use utoipa::OpenApi;
@@ -103,6 +106,15 @@ async fn initialize_admin(args: &Args, pool: &PgPool) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn get_session_key_from_env() -> anyhow::Result<Key> {
+    let session_secret = std::env::var("SESSION_SECRET")?;
+    let session_secret = BASE64_STANDARD.decode(session_secret).context("Failed to decode SESSION_SECRET as base64")?;
+    if session_secret.len() < 64 {
+        return Err(anyhow::anyhow!("KeyLength: SESSION_SECRET must be at least 64 bytes"));
+    }
+    Ok(Key::from(&session_secret))
+}
+
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -112,7 +124,15 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     let use_tls = args.tls;
-    let secret_key = Key::generate();
+    let secret_key = match get_session_key_from_env() {
+        Ok(key) => key,
+        Err(e) => {
+            warn!("No session key available from environment: {}", e);
+            warn!("Generating new random session key");
+            Key::generate()
+        }
+    };
+    
 
     let redis_url =
         std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
@@ -140,10 +160,11 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Migration complete");
     initialize_admin(&args, &pool).await?;
 
+    let insecure_cookies = args.insecure_cookies;
     let server = HttpServer::new(move || {
         let mut app = App::new().wrap(TracingLogger::default());
         let mut session_mgr = SessionMiddleware::builder(redis_store.clone(), secret_key.clone());
-        if args.insecure_cookies {
+        if insecure_cookies {
             session_mgr = session_mgr.cookie_secure(false);
         }
         if use_tls {
@@ -162,7 +183,14 @@ async fn main() -> anyhow::Result<()> {
                 SwaggerUi::new("/swagger-ui/{_:.*}")
                     .url("/api-docs/openapi.json", ApiDoc::openapi()),
             )
-            .service(Files::new("/", "./static").index_file("index.html"))
+            .service(
+                actix_files::Files::new("/", "./static")
+                    .index_file("index.html")
+                    .default_handler(
+                        actix_files::NamedFile::open("./static/index.html")
+                            .expect("Failed to open index.html"),
+                    ),
+            )
             .app_data(web::Data::new(pool.clone()))
     });
 
