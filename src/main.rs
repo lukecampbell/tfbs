@@ -1,4 +1,5 @@
 use std::net::ToSocketAddrs;
+use std::sync::Arc;
 
 use actix_files::NamedFile;
 use actix_session::storage::RedisSessionStore;
@@ -23,11 +24,12 @@ use crate::data::User;
 mod api;
 mod data;
 mod error;
+mod logtail;
 mod tls;
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(api::create_user, api::login, api::logout, api::verify, api::get_user),
+    paths(api::create_user, api::login, api::logout, api::verify, api::get_user, logtail::ws_logs),
     components(schemas(data::User, api::CreateUser, api::LoginRequest, api::SessionUser))
 )]
 struct ApiDoc;
@@ -159,6 +161,13 @@ async fn main() -> anyhow::Result<()> {
         .context("Failed to run migrations")?;
     tracing::info!("Migration complete");
     initialize_admin(&args, &pool).await?;
+    let tailer = Arc::new(logtail::LogTailer::new(10_000)); // ring buffer of 10k lines
+    let tailer_clone = tailer.clone();
+    tokio::spawn(async move {
+        if let Err(e) = logtail::tail_file("thefile", tailer_clone).await {
+            tracing::error!("Log tailer failed: {e}");
+        }
+    });
 
     let insecure_cookies = args.insecure_cookies;
     let server = HttpServer::new(move || {
@@ -177,7 +186,8 @@ async fn main() -> anyhow::Result<()> {
                     .route("/users", web::post().to(api::create_user))
                     .route("/login", web::post().to(api::login))
                     .route("/logout", web::get().to(api::logout))
-                    .route("/verify", web::post().to(api::verify)),
+                    .route("/verify", web::post().to(api::verify))
+                    .route("/logs/ws", web::get().to(logtail::ws_logs))
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")
@@ -192,6 +202,7 @@ async fn main() -> anyhow::Result<()> {
                     ),
             )
             .app_data(web::Data::new(pool.clone()))
+            .app_data(web::Data::from(tailer.clone()))
     });
 
     let server = if args.tls {

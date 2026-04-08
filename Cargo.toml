@@ -29,3 +29,4 @@ uuid = { version = "1.23.0", features = ["serde"] }
 thiserror = "2.0.18"
 rand = "0.10.0"
 base64 = "0.22.1"
+actix-ws = "0.4.0"
