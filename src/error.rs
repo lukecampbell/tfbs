@@ -7,6 +7,9 @@ pub enum AppError {
 
     #[error("Database")]
     DatabaseError(#[from] sqlx::Error),
+
+    #[error("Redis")]
+    RedisError(#[from] redis::RedisError),
 }
 
 impl AppError {
@@ -14,6 +17,9 @@ impl AppError {
         match self {
             AppError::PasswordHash(_) => "Failed to hash password".to_string(),
             AppError::DatabaseError(_) => "Unexpected error. See logs".to_string(),
+            AppError::RedisError(_) => {
+                "Unable to create websocket due to server error. See logs.".to_string()
+            }
         }
     }
 }
@@ -23,6 +29,7 @@ impl ResponseError for AppError {
         match self {
             AppError::PasswordHash(_) => StatusCode::BAD_REQUEST,
             AppError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::RedisError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 

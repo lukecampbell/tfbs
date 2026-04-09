@@ -10,6 +10,12 @@ use time::{Duration, OffsetDateTime};
 pub const CERT_PATH: &str = "certs/server.pem";
 const KEY_PATH: &str = "certs/server.key";
 
+/// Load a rustls `ServerConfig` from the on-disk cert and key, generating a
+/// fresh self-signed pair for `host` if either file is missing.
+///
+/// The resulting config has no client auth and serves a single certificate.
+/// The `host` argument is only consulted if a new cert has to be generated;
+/// if existing PEM files are present they are used as-is.
 pub fn load_or_generate_config(host: &str) -> anyhow::Result<ServerConfig> {
     if !Path::new(CERT_PATH).exists() || !Path::new(KEY_PATH).exists() {
         generate_self_signed(host)?;
@@ -27,6 +33,13 @@ pub fn load_or_generate_config(host: &str) -> anyhow::Result<ServerConfig> {
         .context("Failed to build TLS config")
 }
 
+/// Generate a self-signed certificate and private key for `host` and write
+/// them to `certs/server.pem` and `certs/server.key`.
+///
+/// Picks the SAN type based on whether `host` parses as an IP address or a
+/// DNS name. The certificate is valid for 30 days starting now, which is
+/// intentionally short: self-signed certs are for development convenience,
+/// not long-lived production use.
 fn generate_self_signed(host: &str) -> anyhow::Result<()> {
     tracing::info!(cn = host, "Generating self-signed certificate");
 

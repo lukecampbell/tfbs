@@ -1,5 +1,5 @@
 use actix_session::Session;
-use actix_web::{web, HttpResponse};
+use actix_web::{web, HttpResponse, Responder};
 use argon2::password_hash;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -148,4 +148,27 @@ pub async fn get_user(session: Session) -> actix_web::Result<HttpResponse> {
         return Ok(HttpResponse::Unauthorized().finish());
     };
     Ok(HttpResponse::Ok().json(SessionUser::from(&user)))
+}
+
+#[utoipa::path(get, path="/api/files", responses(
+    (status = 200, description = "Available file sessions", body = Vec<String>),
+    (status = 401, description = "Use is not logged in"),
+))]
+pub async fn get_files(
+    session: Session,
+    redis: web::Data<redis::Client>,
+) -> actix_web::Result<impl Responder> {
+    let Ok(Some(_user)) = session.get::<User>("user") else {
+        return Ok(HttpResponse::Unauthorized().finish());
+    };
+    let mut redis_conn = redis
+        .get_multiplexed_async_connection()
+        .await
+        .map_err(AppError::RedisError)?;
+    let keys: Vec<String> = redis::cmd("KEYS")
+        .arg("*")
+        .query_async(&mut redis_conn)
+        .await
+        .map_err(AppError::RedisError)?;
+    Ok(HttpResponse::Ok().json(keys))
 }
