@@ -25,6 +25,7 @@ use crate::data::User;
 mod api;
 mod data;
 mod error;
+mod keylocker;
 mod logtail;
 mod tls;
 
@@ -232,7 +233,8 @@ async fn main() -> anyhow::Result<()> {
                     .route("/logout", web::get().to(api::logout))
                     .route("/verify", web::post().to(api::verify))
                     .route("/files", web::get().to(api::get_files))
-                    .route("/logs/ws/{file_id}", web::get().to(logtail::ws_logs)),
+                    .route("/logs/ws/{file_id}", web::get().to(logtail::ws_logs))
+                    .route("/keylocker", web::post().to(api::create_keylocker_entry))
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

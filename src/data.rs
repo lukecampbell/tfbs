@@ -17,6 +17,8 @@ pub struct User {
     pub reset_email: Option<String>,
     /// Roles available to this account
     pub roles: Vec<String>,
+    /// Per-user salt for keylocker KDF
+    pub kdf_salt: Vec<u8>,
 }
 
 impl User {
@@ -26,12 +28,14 @@ impl User {
         reset_email: Option<&str>,
         roles: Vec<String>,
     ) -> Result<Self, password_hash::Error> {
+        let kdf_salt: Vec<u8> = rand::random::<[u8; 16]>().to_vec();
         Ok(Self {
             id: Uuid::new_v4(),
             login: login.to_string(),
             password_hash: Self::hash_password(password)?,
             reset_email: reset_email.map(|v| v.to_string()),
             roles,
+            kdf_salt,
         })
     }
 

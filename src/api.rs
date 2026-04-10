@@ -1,10 +1,15 @@
+use std::collections::HashMap;
+
 use actix_session::Session;
 use actix_web::{web, HttpResponse, Responder};
 use argon2::password_hash;
+use chrono::{DateTime, Utc};
+use clap::Arg;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use uuid::Uuid;
 
-use crate::{data::User, error::AppError};
+use crate::{data::User, error::AppError, keylocker::{ArgonKeyDerivation, ChaChaEncryption, get_server_key}};
 
 #[derive(Clone, Debug, Deserialize, utoipa::ToSchema)]
 pub struct CreateUser {
@@ -75,7 +80,7 @@ pub async fn login(
     req: web::Json<LoginRequest>,
 ) -> actix_web::Result<HttpResponse> {
     let user = sqlx::query_as::<_, User>(
-        "SELECT id, login, password_hash, reset_email, roles FROM users WHERE login=$1",
+        "SELECT id, login, password_hash, reset_email, roles, kdf_salt FROM users WHERE login=$1",
     )
     .bind(&req.login)
     .fetch_optional(pool.get_ref())
@@ -171,4 +176,35 @@ pub async fn get_files(
         .await
         .map_err(AppError::RedisError)?;
     Ok(HttpResponse::Ok().json(keys))
+}
+
+
+#[derive(Serialize, Deserialize, Debug, Clone, utoipa::ToSchema)]
+pub struct KeylockerEntry {
+    name: String,
+    description: Option<String>,
+    #[serde(default = "chrono::Utc::now")]
+    created_date: DateTime<Utc>,
+    fields: HashMap<String, String>
+}
+
+#[derive(Clone, Debug, Deserialize, utoipa::ToSchema)]
+pub struct CreateKeylockerEntry {
+    passphrase: String,
+    entry: KeylockerEntry,
+}
+
+pub async fn create_keylocker_entry(session: Session, req: web::Json<CreateKeylockerEntry>) -> actix_web::Result<HttpResponse> {
+    let entry_id = Uuid::new_v4();
+    let Ok(Some(user)) = session.get::<User>("user") else {
+        return Ok(HttpResponse::Unauthorized().finish());
+    };
+    let server_key = get_server_key().map_err(AppError::ServerKey)?;
+    let user_salt: [u8; 16] = user.kdf_salt.clone().try_into().map_err(|e| AppError::UserSalt)?;
+    let user_ikm = ArgonKeyDerivation::get_user_key(&req.passphrase, &user_salt).map_err(AppError::KdfError)?;
+    let okm = ArgonKeyDerivation::get_final_key(&user_ikm, &server_key).map_err(AppError::KdfError)?;
+    let plaintext = serde_json::to_string(&req.entry).map_err(AppError::SerializationError)?;
+    let entry = ChaChaEncryption::encrypt(&okm, plaintext.as_bytes(), None, &user.id, &entry_id).map_err(AppError::EncryptionError)?;
+    println!("{:?}", entry);
+    Ok(HttpResponse::Created().finish())
 }

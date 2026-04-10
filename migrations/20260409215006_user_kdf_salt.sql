@@ -1,0 +1,3 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+ALTER TABLE users ADD COLUMN kdf_salt BYTEA NOT NULL DEFAULT gen_random_bytes(16);
