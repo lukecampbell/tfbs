@@ -3,7 +3,7 @@ services:
     image: postgres:17
     environment:
       POSTGRES_USER: tfbs
-      POSTGRES_PASSWORD: tfbs
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
       POSTGRES_DB: tfbs
     ports:
       - "5432:5432"

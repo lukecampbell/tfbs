@@ -1,5 +1,11 @@
 use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 
+use crate::keylocker::{CryptoError, KdfError, ServerKeyError};
+
+/// Application-level error type that maps internal errors to safe HTTP responses.
+/// Internal details are logged server-side; clients receive only a generic message
+/// via `safe_display()` to avoid leaking implementation details.
+#[allow(dead_code)]
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
     #[error("PasswordHash: {0}")]
@@ -10,9 +16,34 @@ pub enum AppError {
 
     #[error("Redis")]
     RedisError(#[from] redis::RedisError),
+
+    #[error("ServerKey")]
+    ServerKey(#[from] ServerKeyError),
+
+    #[error("UserSalt: The salt length is invalid for encryption/decryption")]
+    UserSalt,
+
+    #[error("KdfError: Failed to derive key: {0}")]
+    KdfError(#[from] KdfError),
+
+    #[error("EncryptionError: {0}")]
+    EncryptionError(chacha20poly1305::Error),
+
+    #[error("DecryptionError: {0}")]
+    DecryptionError(chacha20poly1305::Error),
+
+    #[error("SerializationError: Failed to serialize an object: {0}")]
+    SerializationError(serde_json::Error),
+
+    #[error("DeserializationError: Failed to deserialize an object: {0}")]
+    DeserializationError(serde_json::Error),
+
+    #[error("CryptoError: {0}")]
+    CryptoError(CryptoError),
 }
 
 impl AppError {
+    /// Returns a client-safe error message that does not expose internal details.
     fn safe_display(&self) -> String {
         match self {
             AppError::PasswordHash(_) => "Failed to hash password".to_string(),
@@ -20,6 +51,18 @@ impl AppError {
             AppError::RedisError(_) => {
                 "Unable to create websocket due to server error. See logs.".to_string()
             }
+            AppError::ServerKey(_) => "Server-side cryptography not enabled".to_string(),
+            AppError::UserSalt => "Server-side cryptography not enabled".to_string(),
+            AppError::KdfError(_) => "Server-side cryptography not enabled".to_string(),
+            AppError::EncryptionError(_) => "Server-side cryptography not enabled".to_string(),
+            AppError::DecryptionError(_) => "Server-side cryptography not enabled".to_string(),
+            AppError::SerializationError(_) => {
+                "Failed to serialize an object into JSON".to_string()
+            }
+            AppError::DeserializationError(_) => {
+                "Failed to deserialize an object from JSON".to_string()
+            }
+            AppError::CryptoError(_) => "Cryptographic Error".to_string(),
         }
     }
 }
@@ -30,6 +73,14 @@ impl ResponseError for AppError {
             AppError::PasswordHash(_) => StatusCode::BAD_REQUEST,
             AppError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::RedisError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::ServerKey(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::UserSalt => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::KdfError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::EncryptionError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::DecryptionError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::SerializationError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::DeserializationError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::CryptoError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 

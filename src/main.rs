@@ -25,6 +25,7 @@ use crate::data::User;
 mod api;
 mod data;
 mod error;
+mod keylocker;
 mod logtail;
 mod tls;
 
@@ -37,9 +38,18 @@ mod tls;
         api::verify,
         api::get_user,
         logtail::ws_logs,
-        api::get_files
+        api::get_files,
+        api::keylocker_api
     ),
-    components(schemas(data::User, api::CreateUser, api::LoginRequest, api::SessionUser))
+    components(schemas(
+        data::User,
+        api::CreateUser,
+        api::LoginRequest,
+        api::SessionUser,
+        api::CreateKeylockerEntry,
+        api::ReadKeylockerEntries,
+        api::KeylockerRequest
+    ))
 )]
 struct ApiDoc;
 
@@ -232,7 +242,8 @@ async fn main() -> anyhow::Result<()> {
                     .route("/logout", web::get().to(api::logout))
                     .route("/verify", web::post().to(api::verify))
                     .route("/files", web::get().to(api::get_files))
-                    .route("/logs/ws/{file_id}", web::get().to(logtail::ws_logs)),
+                    .route("/logs/ws/{file_id}", web::get().to(logtail::ws_logs))
+                    .route("/keylocker", web::post().to(api::keylocker_api)),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

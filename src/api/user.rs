@@ -43,6 +43,7 @@ impl TryFrom<&CreateUser> for User {
         (status = 500, description = "Internal error"),
     )
 )]
+/// Create a new user account and persist it to Postgres.
 pub async fn create_user(
     pool: web::Data<PgPool>,
     body: web::Json<CreateUser>,
@@ -69,13 +70,14 @@ pub async fn create_user(
         (status = 401, description = "Invalid credentials"),
     )
 )]
+/// Authenticate a user by login/password and store the User in the session.
 pub async fn login(
     session: Session,
     pool: web::Data<PgPool>,
     req: web::Json<LoginRequest>,
 ) -> actix_web::Result<HttpResponse> {
     let user = sqlx::query_as::<_, User>(
-        "SELECT id, login, password_hash, reset_email, roles FROM users WHERE login=$1",
+        "SELECT id, login, password_hash, reset_email, roles, kdf_salt FROM users WHERE login=$1",
     )
     .bind(&req.login)
     .fetch_optional(pool.get_ref())
@@ -100,6 +102,7 @@ pub async fn login(
         (status = 204, description = "User session is cleared")
     )
 )]
+/// Clear the user's session, effectively logging them out.
 pub async fn logout(session: Session) -> actix_web::Result<HttpResponse> {
     session.purge();
     Ok(HttpResponse::NoContent().finish())
@@ -113,6 +116,7 @@ pub async fn logout(session: Session) -> actix_web::Result<HttpResponse> {
         (status = 401, description = "User is not logged in"),
     )
 )]
+/// Check whether the current session is authenticated and return the login name.
 pub async fn verify(session: Session) -> actix_web::Result<HttpResponse> {
     let Ok(Some(user)) = session.get::<User>("user") else {
         return Ok(HttpResponse::Unauthorized().finish());
@@ -143,6 +147,7 @@ impl From<&User> for SessionUser {
         (status = 401, description = "User is not logged in"),
     )
 )]
+/// Return the current session user's login and roles.
 pub async fn get_user(session: Session) -> actix_web::Result<HttpResponse> {
     let Ok(Some(user)) = session.get::<User>("user") else {
         return Ok(HttpResponse::Unauthorized().finish());
@@ -154,6 +159,7 @@ pub async fn get_user(session: Session) -> actix_web::Result<HttpResponse> {
     (status = 200, description = "Available file sessions", body = Vec<String>),
     (status = 401, description = "Use is not logged in"),
 ))]
+/// List all file session keys stored in Redis (requires authentication).
 pub async fn get_files(
     session: Session,
     redis: web::Data<redis::Client>,

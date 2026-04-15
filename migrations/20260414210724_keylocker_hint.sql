@@ -1,0 +1,2 @@
+ALTER TABLE keylocker
+ADD COLUMN hint TEXT;

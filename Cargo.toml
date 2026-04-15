@@ -10,7 +10,7 @@ actix-files = "0.6.10"
 actix-session = { version = "0.11.0", features = ["redis-session"] }
 actix-web = { version = "4.13.0", features = ["rustls-0_23"] }
 anyhow = "1.0.102"
-argon2 = "0.5.3"
+argon2 = { version = "0.5.3", features = ["rand"] }
 clap = { version = "4.6.0", features = ["derive", "cargo"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
@@ -23,11 +23,18 @@ tracing-actix-web = "0.7.21"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "postgres", "uuid"] }
 url = "2"
-utoipa = { version = "5", features = ["actix_extras", "uuid"] }
+utoipa = { version = "5", features = ["actix_extras", "uuid", "chrono"] }
 utoipa-swagger-ui = { version = "9", features = ["actix-web"] }
-uuid = { version = "1.23.0", features = ["serde"] }
+uuid = { version = "1.23.0", features = ["serde", "v4"] }
 thiserror = "2.0.18"
 rand = "0.10.0"
 base64 = "0.22.1"
 actix-ws = "0.4.0"
 redis = { version = "0.27", features = ["tokio-comp"] }
+hkdf = "0.13.0"
+chacha20poly1305 = "0.10.1"
+sha2 = "0.11.0"
+chrono = { version = "0.4.44", features = ["serde"] }
+
+[dev-dependencies]
+pretty-hex = "0.4.2"

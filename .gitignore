@@ -29,3 +29,5 @@ certs/
 static/
 tasks/
 tfbs.db
+!keys/.gitkeep
+keys/*

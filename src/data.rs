@@ -17,25 +17,30 @@ pub struct User {
     pub reset_email: Option<String>,
     /// Roles available to this account
     pub roles: Vec<String>,
+    /// Per-user salt for keylocker KDF
+    pub kdf_salt: Vec<u8>,
 }
 
 impl User {
+    /// Creates a new user with a hashed password, random UUID, and random KDF salt.
     pub fn new(
         login: &str,
         password: &str,
         reset_email: Option<&str>,
         roles: Vec<String>,
     ) -> Result<Self, password_hash::Error> {
+        let kdf_salt: Vec<u8> = rand::random::<[u8; 16]>().to_vec();
         Ok(Self {
             id: Uuid::new_v4(),
             login: login.to_string(),
             password_hash: Self::hash_password(password)?,
             reset_email: reset_email.map(|v| v.to_string()),
             roles,
+            kdf_salt,
         })
     }
 
-    /// Hash the password
+    /// Hash a password using Argon2 with a random salt, returning the PHC-format string.
     pub fn hash_password(password: &str) -> Result<String, password_hash::Error> {
         let argon2 = Argon2::default();
         let salt = SaltString::generate(&mut OsRng);
@@ -44,7 +49,7 @@ impl User {
             .map(|v| v.to_string())
     }
 
-    /// Return true if the password is verified and valid
+    /// Verify a plaintext password against this user's stored hash.
     #[allow(dead_code)]
     pub fn verify_password(&self, password: &str) -> bool {
         let argon2 = Argon2::default();
@@ -55,6 +60,13 @@ impl User {
             .verify_password(password.as_bytes(), &parsed_hash)
             .is_ok()
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, utoipa::ToSchema)]
+pub struct KeylockerRow {
+    pub id: Uuid,
+    pub ldata: String,
+    pub hint: Option<String>,
 }
 
 #[cfg(test)]
